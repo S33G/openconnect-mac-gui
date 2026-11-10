@@ -66,13 +66,13 @@ struct MenuContent: View {
                     Spacer()
                     Button(addingGateway ? "Done" : "Add gateway") { addingGateway.toggle() }
                         .buttonStyle(.plain).font(.caption).foregroundStyle(.purple)
-                        .disabled(model.busy || model.machine.status == .connected || model.machine.status == .needsSSO)
+                        .disabled(model.machine.sessionActive)
                 }
                 if !model.gateways.isEmpty {
                     Picker("Gateway", selection: Binding(get: { model.machine.selectedGateway ?? "" }, set: model.choose)) {
                         ForEach(model.gateways, id: \.self) { host in Text(host).tag(host) }
                     }.labelsHidden().frame(maxWidth: .infinity)
-                        .disabled(model.busy || [.connected, .needsSSO, .reconnecting, .connecting].contains(model.machine.status))
+                        .disabled(model.machine.sessionActive)
                 } else {
                     Text("No gateways configured").font(.callout).foregroundStyle(.secondary)
                 }
@@ -87,20 +87,19 @@ struct MenuContent: View {
                     }
                     Text("Use the hostname supplied by your IT team.").font(.caption2).foregroundStyle(.secondary)
                 }
-                if model.machine.status == .needsSSO, let gateway = model.machine.selectedGateway {
-                    Button("Copy gateway for Cisco") { model.copy(gateway) }.font(.caption)
-                }
-                if !model.config.preferredGroup.isEmpty {
-                    Text("Suggested group: \(model.config.preferredGroup)").font(.caption).foregroundStyle(.secondary)
-                }
+                TextField("Authentication group (optional)", text: $model.groupInput)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(model.machine.sessionActive || model.groupManaged)
+                    .accessibilityLabel("Authentication group")
+
             }
 
             HStack(spacing: 10) {
-                if model.machine.status == .ciscoMissing {
-                    Button("Open Self Service", action: model.openSelfService).buttonStyle(.borderedProminent).tint(.purple)
+                if model.machine.status == .dependenciesMissing {
+                    Button("Install dependencies", action: model.copyInstallCommand).buttonStyle(.borderedProminent).tint(.purple)
                     Button("Re-check", action: model.recheck).disabled(model.busy)
                 } else if model.machine.status == .needsSSO {
-                    Button("Continue in Cisco", action: model.openCisco).buttonStyle(.borderedProminent).tint(.blue)
+                    Button("Open Terminal", action: model.openTerminal).buttonStyle(.borderedProminent).tint(.blue)
                     Button("Cancel", action: model.cancelSignIn)
                 } else {
                     if model.machine.status == .connected {
@@ -123,10 +122,10 @@ struct MenuContent: View {
                     Text(model.autoReconnectManaged ? "Managed by your organization" : "After wake, network changes, or a dropped tunnel")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
-            }.toggleStyle(.switch).controlSize(.small).disabled(model.autoReconnectManaged)
+            }.toggleStyle(.switch).controlSize(.small).disabled(model.autoReconnectManaged || model.machine.sessionActive)
 
             HStack {
-                Button("Open Cisco", action: model.openCisco)
+                Button("Open Terminal", action: model.openTerminal)
                 Spacer()
                 Button { model.copyDiagnostics() } label: { Label("Copy diagnostics", systemImage: "doc.on.doc") }
             }.buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
@@ -136,7 +135,7 @@ struct MenuContent: View {
             }
             HStack(spacing: 5) {
                 Image(systemName: "lock.shield")
-                Text("Your sign-in stays with Cisco.")
+                Text("Browser SSO · no passwords saved by this app.")
                 Spacer()
                 Button("Re-check", action: model.recheck).buttonStyle(.plain).disabled(model.busy)
             }.font(.system(size: 10)).foregroundStyle(.tertiary)

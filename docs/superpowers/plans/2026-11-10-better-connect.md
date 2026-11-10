@@ -1,3 +1,5 @@
+> Historical plan, superseded by [OpenConnect migration](2026-11-10-openconnect.md). These backend constraints no longer describe version 0.2.0.
+
 # Betterer Connect Implementation Plan
 
 **Goal:** Build the supplied native macOS menu-bar app through M1/M2, with a runnable local app, tests, and distribution tooling.

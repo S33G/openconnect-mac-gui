@@ -1,86 +1,87 @@
 # Betterer Connect
 
-A native macOS menu-bar companion for Cisco Secure Client. Clear connection status, remembered gateways, browser sign-in handoff, and bounded reconnects after network changes.
+A native macOS menu-bar app for **OpenConnect + openconnect-sso**. Remember your gateway, complete browser SSO, and see clear connection status in a small SwiftUI window.
 
-Betterer Connect uses your existing Cisco installation. It includes no Cisco software and does not collect passwords, cookies, or tokens. This is an independent project, unaffiliated with Cisco or any employer. Cisco and AnyConnect are trademarks of their respective owners.
+Independent, MIT-licensed project. No employer branding, bundled VPN client, telemetry, or account service. Cisco Secure Client is not used or required.
 
-**Status:** early local prototype, version 0.1.0. Unit-tested connection logic; real VPN/SSO behavior still needs qualification across Cisco versions and organization policies. Development builds are ad-hoc signed, not notarized releases.
+**Status:** early development build, version 0.2.0. Local builds are ad-hoc signed. Full tunnel, sleep/wake, and distribution qualification are tracked in [validation](docs/validation.md).
+
+## Install dependencies
+
+Requires Homebrew and macOS 13 or newer. The tested SSO helper is 0.8.1; its older dependencies need Python 3.11 and setuptools below 81:
+
+```sh
+brew install openconnect pipx python@3.11
+pipx install --python "$(brew --prefix python@3.11)/bin/python3.11" 'openconnect-sso==0.8.1'
+pipx inject --force openconnect-sso 'setuptools<81'
+```
+
+Already installed it with a different Python? Use `pipx reinstall --python "$(brew --prefix python@3.11)/bin/python3.11" openconnect-sso`, then repeat the setuptools injection. The app detects Homebrew in `/opt/homebrew` or `/usr/local` and pipx's launcher in `~/.local/bin`.
+
+[openconnect-sso](https://github.com/vlaci/openconnect-sso) supplies its own Qt browser. It is intended for SAML authentication with compatible VPN gateways; gateway policy and identity-provider support vary. [OpenConnect](https://www.infradead.org/openconnect/manual.html) creates the tunnel and manages routes/DNS through its installed vpnc-script.
 
 ## Build and run
 
-Requires macOS 13 or newer, Xcode with Swift 6 or newer, and an installed, working Cisco Secure Client (or legacy AnyConnect).
+Requires Xcode with Swift 6 or newer. Tests do not need a VPN account or administrator access.
 
 ```sh
 swift test --disable-sandbox
+python3 -m unittest discover -s Tests/SessionBridgeTests -v
 scripts/build-app.sh
 open 'dist/Betterer Connect.app'
 ```
 
-The app lives in the menu bar. Open its shield icon, choose a discovered gateway or add the DNS hostname supplied by IT, then click **Connect**. If authentication is needed, finish it in Cisco's window. Use **Copy gateway for Cisco** if Cisco needs the hostname entered manually. Betterer Connect never fills sign-in forms.
+1. Open the shield in the menu bar. Add your VPN gateway hostname and authentication group.
+2. Click **Connect**. Terminal opens for the normal `sudo` administrator prompt. Enter your Mac password there.
+3. Complete your organization's sign-in and MFA in the browser opened by openconnect-sso. The app reports Connected only after OpenConnect reports a configured tunnel.
+4. Click **Disconnect** to stop that session. Keep Terminal open until teardown completes. Quit also requests disconnection.
 
-**Disconnect** stops automatic retries. **Reconnect automatically** only acts after you request a connection or the app observes an existing connected tunnel. Launching the app while disconnected does not start a VPN connection. Quit leaves Cisco and the tunnel running. The app has no login item or updater; launch it manually or deploy it using your organization's tools.
+No username is passed with `--user`: upstream enables password/TOTP collection and keyring storage in that mode. The app uses visible browser sign-in, disables upstream autofill rules, and supplies a fresh private configuration for each session. It never requests your VPN password itself.
 
-To preview the interface without running Cisco commands:
+**Reconnect automatically** allows OpenConnect up to 300 seconds to restore an active tunnel. After an established tunnel exits, the app can make up to five further attempts with bounded backoff. The budget resets after 30 seconds of confirmed connection. Authentication, permission, and certificate failures require an explicit retry. Launching the app never starts a new tunnel automatically. Change the reconnect setting while disconnected; with it off, OpenConnect's reconnect window is one second.
+
+To preview the interface with a generic gateway, quit any running instance and use:
 
 ```sh
-open 'dist/Betterer Connect.app' --args --demo
+open 'dist/Betterer Connect.app' --args --demo --show-window
 ```
-
-Quit any existing instance first. Preview mode does not simulate a successful connection.
-
-## What it does
-
-- Shows Connected, Connecting, Reconnecting, Needs sign-in, Offline, Missing Cisco, and Error states with explanations.
-- Reads gateways from managed preferences and installed Cisco profiles; remembers your selection separately from a verified successful gateway.
-- Opens Cisco for interactive authentication and observes for up to three minutes.
-- Defers to an active Cisco connection attempt, with five bounded retry attempts and jitter when Cisco reports a dropped tunnel.
-- Watches network path and sleep/wake, suppresses retry notifications while offline, and supports opt-in notifications.
-- Copies diagnostics containing versions, state, selected gateway, and allowlisted error codes. Review internal gateway hostnames before sharing publicly.
 
 ## Configuration
 
-Preference domain: `io.github.bettererconnect` (provisional; set `BUNDLE_ID` when packaging if you use your own domain). App defaults contain no gateways or company-specific support details. The public template at [`Packaging/managed-preferences.plist`](Packaging/managed-preferences.plist) is suitable as the custom-settings payload for an MDM tool. It is not itself a signed `.mobileconfig`.
+Preference domain: `io.github.bettererconnect`. No organizational gateways are included. [Managed preference template](Packaging/managed-preferences.plist) is a custom-settings payload example, not a signed mobileconfig.
 
 | Key | Type | Default |
 | --- | --- | --- |
 | `GatewayList` | array of DNS hostnames | empty |
 | `DefaultGateway` | DNS hostname | empty |
-| `PreferredGroup` | string, UI hint only | empty |
+| `PreferredGroup` | authentication group passed to SSO | empty |
 | `AutoReconnect` | boolean | true |
-| `MaxBackoffSeconds` | number, 2–3600 | 300 |
-| `SupportChannel` | string shown after copying diagnostics | empty |
+| `MaxBackoffSeconds` | retry delay cap, 2–3600 | 300 |
+| `SupportChannel` | optional support label | empty |
 
-Managed preferences take precedence through macOS preferences. Gateway list order is preserved; the default gateway, last-used host, last selection, and profile hosts are appended without duplicates. The default selects the initial host. A user can select a different gateway for the current session. `LastSelectedGateway` remembers an explicit user selection. `LastUsedGateway` is written after a direct CLI connection or a hostname reported by Cisco stats; a connection appearing after GUI handoff does not prove the selected gateway was used. A managed `AutoReconnect` value locks the local toggle.
+Managed values take precedence. Forced group and reconnect preferences lock their controls. Gateway selection and the last successfully used gateway are remembered separately. A default gateway takes precedence on startup; users can select another for the session. Hostnames only: ports, URL paths, and user-group URL suffixes are not currently supported.
 
-For an unmanaged development install, use your own gateway:
+## Architecture and lifecycle
 
-```sh
-defaults write io.github.bettererconnect GatewayList -array vpn.example.com
-defaults write io.github.bettererconnect DefaultGateway -string vpn.example.com
-```
+- `BetterConnectCore`: validated configuration and pure lifecycle/retry logic.
+- `BettererConnect`: unchanged SwiftUI menu/window layout, preferences, network monitoring, Terminal launch, and safe session-status polling.
+- `Resources/session_bridge.py`: an unprivileged Python 3.11+ supervisor. It runs `sudo -v`, then the installed SSO helper, in owned foreground process groups. The Mac password goes directly to sudo's terminal.
 
-The example domain is intentionally non-operational. Do not commit organizational profiles, VPN transcripts, or diagnostics into this repository.
+The app and supervisor communicate through a private folder under `~/Library/Application Support/Betterer Connect/Sessions`. It contains a non-secret request, an owner heartbeat, a stop marker, and enumerated status. SSO configuration and Qt browser data are isolated there and removed after teardown. Raw output is bounded in memory and discarded. The app receives no authentication transcript, cookies, or tokens. Diagnostics omit gateway and group as well.
 
-## Architecture
+Cancellation interrupts only the owned process group. It does not declare disconnection until that group is gone. A missing heartbeat requests teardown; stale or uncertain status blocks another connection. Startup recovers and stops an unfinished previous session. There is no permanent root helper, sudoers modification, background daemon, login item, or updater.
 
-- `BetterConnectCore`: pure state machine, strict CLI parser, profile reader, validated configuration, and serialized process runner. Tests use synthetic hosts and harmless child processes.
-- `BettererConnect`: SwiftUI menu/window, AppKit Cisco handoff, `NWPathMonitor`, sleep/wake watchers, notifications, and preferences.
-- `scripts`: local app bundling and opt-in Developer ID/notarized package production. No downloaded dependencies or Cisco payload.
+The SSO helper passes the authentication cookie to OpenConnect through stdin. The app does not use `--authenticate`, custom disconnect hooks, certificate bypasses, custom route scripts, or arbitrary OpenConnect options. It does not inspect, stop, or uninstall other VPN clients. Avoid running competing VPN tunnels simultaneously.
 
-The CLI path is resolved in order: `/opt/cisco/secureclient/bin/vpn`, then `/opt/cisco/anyconnect/bin/vpn`. The service must also have a running `vpnagentd`. CLI output is transient and bounded; logs contain state and safe error codes only. CLI stdin is closed. Hostnames are passed as individual arguments without a shell.
+## Limits and distribution
 
-## Limits
+- Only sessions started by this app are tracked. Gateway compatibility, device posture requirements, and organization policy need local qualification.
+- Status is based on OpenConnect output and supervisor health, not a probe of internal resources. Reconnect and sleep/wake need real-network testing.
+- Terminal must remain open. Abrupt process termination, host shutdown, or a privileged child that will not exit can require manual recovery; the app keeps an unconfirmed state instead of claiming success.
+- Browser data may exist during a session. Cleanup cannot guarantee secure erasure or recovery from a forced OS/process kill. See [security](SECURITY.md).
+- The dependencies are installed separately under their own licenses. This app does not redistribute them.
 
-- CLI support and text formats vary. Unsupported or unknown state output stops automated actions and directs the user to Cisco. Parser fixtures are sanitized examples, not a compatibility certification.
-- Frontmost Cisco UI and an app-initiated authentication handoff are treated as interactive ownership. The app does not inspect browser tabs or sheets. An independent sign-in in a background Cisco window cannot always be detected; command conflicts cause a fresh state check.
-- Cisco owns SAML, MFA, certificates, posture, routing, and policy. Opening its UI cannot guarantee a particular gateway or completed sign-in. See [Cisco's authentication documentation](https://www.cisco.com/c/en/us/td/docs/security/asa/asa920/configuration/vpn/asa-920-vpn-config/vpn-anyconnect.html) for CLI/browser limitations.
-- Network monitoring detects reachability and interface changes, not SSIDs. No Location or Accessibility access is requested.
-- Cisco may already handle reconnect/resume. Check your VPN profile with IT before enabling overlapping automation. Betterer Connect waits while Cisco reports Connecting/Reconnecting.
-- No privileged service restart, UI termination, credential automation, built-in telemetry, auto-update, or Cisco redistribution.
-
-## Distribution
-
-Local builds are for development. For distribution, supply your own Developer ID Application and Installer identities and a configured `notarytool` keychain profile:
+To create a distribution package, supply your own Developer ID identities and configured notarytool profile:
 
 ```sh
 SIGNING_IDENTITY='Developer ID Application: Your Name (TEAMID)' \
@@ -89,6 +90,6 @@ NOTARY_PROFILE='your-notary-profile' \
 scripts/package-release.sh
 ```
 
-The release script signs with hardened runtime, notarizes/staples the app, packages only that app, then notarizes/staples the installer. It requires your signing credentials; none are included. Builds target the current Mac's architecture. Build/test on both Apple Silicon and Intel before advertising support for both; a universal release is not produced automatically.
+The release script signs, notarizes/staples the app, packages it, then notarizes/staples the installer. Dependencies still require separate installation. Builds target the current Mac architecture; Intel and hardened-runtime distribution behavior need separate qualification.
 
-See [validation](docs/validation.md), [support](docs/support.md), [contributing](CONTRIBUTING.md), and [security](SECURITY.md). MIT licensed.
+See [support](docs/support.md), [contributing](CONTRIBUTING.md), and [validation](docs/validation.md).

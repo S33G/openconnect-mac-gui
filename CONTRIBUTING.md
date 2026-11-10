@@ -1,9 +1,9 @@
 # Contributing
 
-Use Xcode with Swift 6 and run `swift test --disable-sandbox` and `scripts/build-app.sh` before opening a pull request. Keep the core testable without Cisco installed. Include regression tests for retry, cancellation, and parsing changes.
+Use Swift 6 and Python 3.11+. Run `swift test --disable-sandbox`, `python3 -m unittest discover -s Tests/SessionBridgeTests -v`, and `scripts/build-app.sh` before submitting a change. Core and supervisor fixture tests need no VPN account, root privilege, or installed VPN client.
 
-Use `example.com` hostnames and synthetic identities in fixtures. Do not submit real CLI transcripts, internal gateways, cookies, tokens, passwords, company profiles, or personal diagnostics. Report the Cisco version and a minimal sanitized reproduction instead.
+Use example.com hosts and synthetic identities. Never submit real VPN transcripts, internal hostnames, cookies, tokens, passwords, profiles, or personal diagnostics. Include dependency versions and a sanitized reproduction.
 
-Do not implement credential automation, alternative tunnel clients, policy bypasses, privileged service management, or redistribution of Cisco binaries. Any change to signing, subprocess control, managed configuration, or diagnostics needs explicit review.
+Changes to privilege handling, process ownership, browser-data isolation, cancellation, configuration, and diagnostics need careful review and regression tests. Keep runtime dependencies separate; do not bundle their binaries or implement certificate verification bypasses. Check upstream parser behavior when updating the pinned SSO version.
 
-Test real connection flows only on a machine and VPN account you are authorized to use. Record unit tests separately from host integration, signing, notarization, and rollout evidence.
+Test live flows only on a machine and VPN account you are authorized to use. Distinguish unit tests, harmless subprocess tests, real tunnel behavior, signing, and distribution evidence.

@@ -36,43 +36,47 @@ import BetterConnectCore
 extension AppModel {
     var statusTitle: String {
         switch machine.status {
-        case .ciscoMissing: "Cisco unavailable"
+        case .dependenciesMissing: "OpenConnect setup needed"
         case .offNetwork: "Waiting for network"
         case .disconnected: "Ready when you are"
+        case .permission: "Allow the VPN connection"
         case .connecting: "Connecting"
         case .needsSSO: "Finish signing in"
         case .connected: "You're connected"
         case .reconnecting: "Reconnecting"
+        case .disconnecting: "Disconnecting"
         case .error: "Connection needs attention"
         }
     }
     var statusDescription: String {
         switch machine.status {
-        case .ciscoMissing: "Install or repair Cisco Secure Client through your IT team."
+        case .dependenciesMissing: "Install OpenConnect and openconnect-sso, then re-check."
         case .offNetwork: "No network path. Reconnect will wait until you're online."
-        case .disconnected: profileEmpty ? "No VPN profile loaded. Choose or enter your IT-provided gateway." : "Choose a gateway, then connect. Cisco handles your sign-in."
-        case .connecting: "Waiting for Cisco to establish the connection."
-        case .needsSSO: "Complete sign-in in Cisco. If prompted, select the gateway shown below."
-        case .connected: "Cisco reports an active VPN connection."
-        case .reconnecting: machine.attempts > 0 ? "Waiting to retry · attempt \(machine.attempts) of 5" : "Cisco is restoring the connection."
-        case .error: machine.lastError?.message ?? "Open Cisco for details, then retry."
+        case .disconnected: "Choose a gateway and authentication group, then connect."
+        case .permission: "Complete the Mac administrator prompt in Terminal."
+        case .connecting: "OpenConnect is establishing the VPN tunnel."
+        case .needsSSO: "Complete sign-in in the browser window opened by openconnect-sso."
+        case .connected: "OpenConnect configured an active VPN tunnel."
+        case .reconnecting: machine.attempts > 0 ? "Waiting to retry · attempt \(machine.attempts) of 5" : "OpenConnect is restoring the connection."
+        case .disconnecting: "Waiting for OpenConnect to remove the tunnel and restore networking."
+        case .error: machine.lastError?.message ?? SafeError.commandFailed.message
         }
     }
     var statusColor: Color {
         switch machine.status {
         case .connected: .green
-        case .connecting, .reconnecting: .orange
-        case .needsSSO: .blue
-        case .ciscoMissing, .error: .red
+        case .connecting, .reconnecting, .disconnecting: .orange
+        case .needsSSO, .permission: .blue
+        case .dependenciesMissing, .error: .red
         case .offNetwork, .disconnected: .secondary
         }
     }
     var symbol: String {
         switch machine.status {
         case .connected: "checkmark.shield.fill"
-        case .connecting, .reconnecting: "arrow.triangle.2.circlepath"
-        case .needsSSO: "person.crop.circle.badge.exclamationmark"
-        case .ciscoMissing, .error: "exclamationmark.shield.fill"
+        case .connecting, .reconnecting, .disconnecting: "arrow.triangle.2.circlepath"
+        case .needsSSO, .permission: "person.crop.circle.badge.exclamationmark"
+        case .dependenciesMissing, .error: "exclamationmark.shield.fill"
         case .offNetwork: "wifi.slash"
         case .disconnected: "shield"
         }

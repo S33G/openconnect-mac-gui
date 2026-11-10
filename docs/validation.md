@@ -1,33 +1,23 @@
 # Validation record
 
-Local development validation, 2026-11-10. This is not a signed/notarized release or an organization-wide qualification.
+OpenConnect migration, 2026-11-10. Development build 0.2.0; this replaces the previous Cisco-backend evidence.
 
-## Automated evidence
+## Automated and local evidence
 
-- 30 Swift unit/component tests pass and exercise exact state parsing, Cisco's zero-exit-code GUI-ownership error, alias-only host lists, safe diagnostics fields, gateway validation, empty config, retry limits/jitter/reset, terminal error latching, SSO timeout/success, offline/manual-disconnect behavior, managed reconnect updates, and safe XML parsing.
-- Process tests run real harmless child processes to check literal argument handling, closed stdin, timeouts, output bounds, missing executables, and cancellation of active/queued commands.
-- Release app compiles for Apple Silicon, with a macOS 13.0 minimum deployment target.
-- Local ad-hoc signature and bundle plist checked. App bundle payload contains only Betterer Connect and its own icon/metadata. The notarized installer has not been produced.
-- The GitHub workflow is supplied but has not run remotely. Intel/macOS-version matrix and MDM behavior have not been exercised on real managed devices.
+- 13 Swift tests pass: gateway/config validation, retry limits, stable-connection reset, authentication versus tunnel state, confirmed teardown, stale ownership, certificate failure, and bounded subprocess execution.
+- 9 Python supervisor tests pass with harmless real child processes: allowlisted status, private configuration, argument validation, interrupt ownership, owner loss, delayed-launch cancellation, cancellation during the administrator stage, terminal failure after spawn, and missing controlling terminal.
+- Release app builds for Apple Silicon and passes local ad-hoc signature verification. The app now bundles its own Python supervisor, not VPN dependencies.
+- Installed and checked OpenConnect 9.21, openconnect-sso 0.8.1, Python 3.11.18, and setuptools below 81. The SSO CLI starts and its actual argument parser preserves the reconnect timeout. Version 0.8.1 consumes a program-label argument before forwarding options; the launcher accounts for that behavior.
+- Actual Qt standard paths resolve into the private session home, not the user's normal browser storage. No credentials were used in this check.
+- Native UI launches, detects dependencies, accepts gateway/group settings, and reaches the administrator stage through Terminal. Organization values are local preferences and are not included in source.
+- Independent review identified cancellation/recovery gaps and retry-budget reset behavior. Corrections have regression coverage.
 
-## Live evidence
+## Live and distribution boundaries
 
-Test machine: Cisco Secure Client 5.1.20.333. No private gateway names or raw transcripts are included here.
+A complete authenticated tunnel and disconnect have not yet been verified for this backend. The live handoff reached the administrator stage, then the Mac locked before authentication. The session ended at its deadline and the app removed the completed session directory. A new live test requires the user to unlock the Mac, enter the administrator password, and complete SSO/MFA.
 
-- Read-only `state` and `hosts` commands succeed outside the development sandbox. The restricted tool environment produces a Cisco code-signing rejection; this is kept distinct from the normal app launch.
-- Native app launches, detects Cisco and the running agent, discovers installed-profile gateways, and shows Disconnected correctly.
-- Connect while Cisco UI owns control initially exposed an unrecognized error with exit status 0. Added a parser regression and fixed the app to hand off instead of timing out/retrying.
-- Retest visibly reached **Finish signing in** in Betterer Connect and opened Cisco. Cisco's own Connect reached its browser-authentication prompt.
-- Disconnect stops the app's pending retry intent. The three-minute SSO timeout was observed; the pending sign-in was cancelled in Cisco and Cisco returned to Ready to connect. A fully authenticated Connected → Disconnect cycle remains unverified.
-- App/window layout inspected through macOS accessibility and a screenshot. Public screenshots should use `--demo` so no real gateway appears.
+Still to qualify: tunnel routing/DNS restoration, dropped connections, sleep/wake, Terminal closure with an established tunnel, stale recovery under forced process termination, MDM forced preferences, notification delivery, fresh users, Intel, and macOS-version coverage.
 
-## Remaining qualification
+The app is not Developer ID signed or notarized. The installer and supplied GitHub CI workflow have not run remotely. No repository has been published.
 
-- Complete MFA, confirm Connected from CLI and app, verify the selected gateway preference, then verify actual disconnection.
-- Sleep/wake, interface loss/regain, and a dropped tunnel with both valid and expired SSO sessions.
-- Missing-Cisco install/recovery UX on a separate machine. Do not rename or disable a production Cisco installation to test this.
-- Notifications permission/delivery on a properly identified distribution build. The local ad-hoc build's permission request failed; inline status continues to work.
-- Real MDM forced preferences, client/profile variants, read-only stats formats, fresh user accounts, and Intel architecture.
-- Developer ID signing, hardened-runtime distribution execution, notarization, installer validation, and applicable organizational review.
-
-These are integration/distribution gates, not claims covered by unit tests.
+These are integration/distribution boundaries, not outcomes established by unit tests.

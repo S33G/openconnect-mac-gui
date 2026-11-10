@@ -8,7 +8,7 @@ public struct CommandResult: Sendable {
 }
 
 /// Serial, bounded subprocess execution. No shell, no stdin, no raw-output logging.
-/// Cancellation terminates only the CLI child created by this instance, never Cisco UI/agent.
+/// Cancellation terminates only the CLI child created by this instance, never another application.
 public final class ProcessRunner: @unchecked Sendable {
     private let queue = DispatchQueue(label: "betterer-connect.cli", qos: .utility)
     private let lock = NSLock()
@@ -24,19 +24,18 @@ public final class ProcessRunner: @unchecked Sendable {
         if let active, active.isRunning { active.terminate() }
     }
 
-    public func run(executable: String, arguments: [String], timeout: TimeInterval,
-                    stopAtInteractivePrompt: Bool = false) async -> CommandResult {
+    public func run(executable: String, arguments: [String], timeout: TimeInterval) async -> CommandResult {
         guard !Task.isCancelled else { return CommandResult(output: "", exitCode: -1, failure: .operationCancelled) }
         let ticket = lock.withLock { generation }
         return await withCheckedContinuation { continuation in
             queue.async { [self] in
-                continuation.resume(returning: execute(executable, arguments, timeout, stopAtInteractivePrompt, ticket))
+                continuation.resume(returning: execute(executable, arguments, timeout, ticket))
             }
         }
     }
 
     private func execute(_ executable: String, _ arguments: [String], _ timeout: TimeInterval,
-                         _ stopAtInteractivePrompt: Bool, _ ticket: UInt64) -> CommandResult {
+                         _ ticket: UInt64) -> CommandResult {
         let process = Process()
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -76,9 +75,8 @@ public final class ProcessRunner: @unchecked Sendable {
             }
             let now = ProcessInfo.processInfo.systemUptime
             if lock.withLock({ ticket != generation }) { failure = .operationCancelled }
-            let interactive = stopAtInteractivePrompt && CiscoParser.needsSSO(String(decoding: data, as: UTF8.self))
             if now >= deadline && failure == nil { failure = .timedOut }
-            if (failure != nil || interactive), process.isRunning, stopRequestedAt == nil {
+            if failure != nil, process.isRunning, stopRequestedAt == nil {
                 process.terminate(); stopRequestedAt = now
             }
             if let stopped = stopRequestedAt, now - stopped > 0.25, process.isRunning {
