@@ -8,7 +8,7 @@ binary_dir="$(swift build --disable-sandbox --configuration "$configuration" --s
 app="$PWD/dist/Betterer Connect.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$binary_dir/BettererConnect" "$app/Contents/MacOS/BettererConnect"
-cp Resources/session_bridge.py "$app/Contents/Resources/session_bridge.py"
+cp Resources/session_bridge.py Resources/openconnect_auth.py "$app/Contents/Resources/"
 cp Packaging/Info.plist "$app/Contents/Info.plist"
 swift scripts/make-icon.swift "$PWD/.build/BettererConnect.iconset"
 iconutil -c icns "$PWD/.build/BettererConnect.iconset" -o "$app/Contents/Resources/BettererConnect.icns"

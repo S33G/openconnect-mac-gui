@@ -50,12 +50,12 @@ extension AppModel {
     }
     var statusDescription: String {
         switch machine.status {
-        case .dependenciesMissing: "Install OpenConnect and openconnect-sso, then re-check."
+        case .dependenciesMissing: "Install OpenConnect and Python 3.11 or newer, then re-check."
         case .offNetwork: "No network path. Reconnect will wait until you're online."
         case .disconnected: "Choose a gateway and authentication group, then connect."
         case .permission: "Complete the Mac administrator prompt in Terminal."
         case .connecting: "OpenConnect is establishing the VPN tunnel."
-        case .needsSSO: "Complete sign-in in the browser window opened by openconnect-sso."
+        case .needsSSO: "Complete sign-in in your default browser."
         case .connected: "OpenConnect configured an active VPN tunnel."
         case .reconnecting: machine.attempts > 0 ? "Waiting to retry · attempt \(machine.attempts) of 5" : "OpenConnect is restoring the connection."
         case .disconnecting: "Waiting for OpenConnect to remove the tunnel and restore networking."

@@ -53,6 +53,7 @@ public struct ConnectionMachine: Sendable {
     public mutating func observe(phase: String, finished: Bool, now: Double) {
         guard sessionActive else { return }
         let failure: SafeError? = switch phase {
+        case "browser_unsupported": .browserUnsupported
         case "certificate_failed": .certificate
         case "authentication_failed": .cancelled
         case "permission_failed": .permission

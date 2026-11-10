@@ -4,24 +4,13 @@ import BetterConnectCore
 
 struct OpenConnectInstallation {
     var openconnect: String?
-    var sso: String?
     var python: String?
-    var present: Bool { openconnect != nil && sso != nil && python != nil }
+    var present: Bool { openconnect != nil && python != nil }
     static func detect() -> Self {
         let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser.path
         let oc = ["/opt/homebrew/bin/openconnect", "/usr/local/bin/openconnect"].first(where: fm.isExecutableFile)
-        let sso = [home + "/.local/bin/openconnect-sso", "/opt/homebrew/bin/openconnect-sso", "/usr/local/bin/openconnect-sso"].first(where: fm.isExecutableFile)
-        var python: String?
-        if let sso {
-            let sibling = URL(fileURLWithPath: sso).resolvingSymlinksInPath().deletingLastPathComponent().appendingPathComponent("python").path
-            if fm.isExecutableFile(atPath: sibling) { python = sibling }
-            else if let first = try? String(contentsOfFile: sso, encoding: .utf8).components(separatedBy: .newlines).first,
-                    first.hasPrefix("#!/"), first.contains("python"), fm.isExecutableFile(atPath: String(first.dropFirst(2))) {
-                python = String(first.dropFirst(2))
-            }
-        }
-        return Self(openconnect: oc, sso: sso, python: python)
+        let python = ["/opt/homebrew/bin/python3.11", "/usr/local/bin/python3.11", "/opt/homebrew/bin/python3", "/usr/local/bin/python3"].first(where: fm.isExecutableFile)
+        return Self(openconnect: oc, python: python)
     }
 }
 
@@ -29,7 +18,6 @@ struct SessionRequest: Codable {
     let sessionID: String
     let host: String
     let group: String
-    let sso: String
     let openconnect: String
     let autoReconnect: Bool
     let bootID: String?
@@ -80,9 +68,9 @@ struct SessionStatus: Decodable {
         return nil
     }
     static func create(installation: OpenConnectInstallation, host: String, group: String, automatic: Bool) throws -> OpenConnectSession {
-        guard let sso = installation.sso, let oc = installation.openconnect, let python = installation.python,
+        guard let oc = installation.openconnect, let python = installation.python,
               let bridge = Bundle.main.url(forResource: "session_bridge", withExtension: "py") else { throw SafeError.unavailable }
-        let request = SessionRequest(sessionID: UUID().uuidString, host: host, group: group, sso: sso, openconnect: oc, autoReconnect: automatic, bootID: bootIdentity())
+        let request = SessionRequest(sessionID: UUID().uuidString, host: host, group: group, openconnect: oc, autoReconnect: automatic, bootID: bootIdentity())
         let root = sessionsRoot.appendingPathComponent(request.sessionID, isDirectory: true)
         let fm = FileManager.default
         try fm.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])

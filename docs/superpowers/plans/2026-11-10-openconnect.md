@@ -1,3 +1,5 @@
+> The native external-browser flow in version 0.3.0 supersedes the Qt/openconnect-sso parts of this migration. OpenConnect authenticates as the user, with an in-memory cookie pipe to the privileged tunnel.
+
 # OpenConnect backend migration
 
 User direction supersedes the original invoke-only Cisco design. Keep the native UI layout and open-source branding; remove Cisco client dependency completely.

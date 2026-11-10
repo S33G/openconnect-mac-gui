@@ -27,25 +27,15 @@ class BridgeTests(unittest.TestCase):
         self.assertIsNone(m.classify('password=secret token=another username=private@example.com'))
         self.assertIsNone(m.classify('A message quoted: Configured as 10.0.0.2, with SSL connected'))
 
-    def test_commands_disable_password_capture_and_pass_group_as_one_argument(self):
-        m = self.module()
-        cmd = m.command('/tmp/openconnect-sso', 'vpn.example.com', 'Staff Users', True)
-        self.assertNotIn('--user', cmd)
-        self.assertNotIn('--authenticate', cmd)
-        self.assertEqual(cmd[cmd.index('--authgroup') + 1], 'Staff Users')
-        self.assertIn('--browser-display-mode', cmd)
-        with self.assertRaises(ValueError): m.command('/tmp/openconnect-sso', '-x', '', True)
-        with self.assertRaises(ValueError): m.command('/tmp/openconnect-sso', 'vpn.example.com', 'x\ny', True)
-
-    def test_private_environment_cannot_load_saved_credentials(self):
+    def test_environment_keeps_default_browser_home_without_python_injection(self):
         m = self.module()
         with tempfile.TemporaryDirectory() as folder:
             env = m.environment(Path(folder), '/opt/homebrew/bin/openconnect')
-            self.assertEqual(env['PYTHON_KEYRING_BACKEND'], 'keyring.backends.null.Keyring')
-            self.assertEqual(env['XDG_CONFIG_HOME'], env['XDG_CONFIG_DIRS'])
-            config = Path(env['XDG_CONFIG_HOME']) / 'openconnect-sso/config.toml'
-            self.assertEqual(config.read_text(), 'auto_fill_rules = {}\n')
-            self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(env.get('HOME'), os.environ.get('HOME'))
+            self.assertNotIn('PYTHONPATH', env)
+            self.assertNotIn('SSLKEYLOGFILE', env)
+            self.assertNotIn('CFFIXED_USER_HOME', env)
+            self.assertEqual(env['PATH'], '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin')
 
     def test_supervisor_streams_safe_status_and_stops_only_owned_session(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -80,6 +70,18 @@ class LifecycleTests(unittest.TestCase):
     def run_fixture(self, root, setup, call):
         code = f"import importlib.util,os,sys;from pathlib import Path;s=importlib.util.spec_from_file_location('b',{str(BRIDGE)!r});m=importlib.util.module_from_spec(s);s.loader.exec_module(m);root=Path({str(root)!r});" + '\n' + setup + '\n' + call
         return subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def test_specific_failure_survives_generic_auth_wrapper_error(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'owner').touch()
+            fixture = "print('No SSO handler');print('Authentication failed');raise SystemExit(1)"
+            call = f"m.supervise([sys.executable,'-c',{fixture!r}],root,dict(os.environ),'fixture',None)"
+            p = self.run_fixture(root, '', call)
+            p.wait(timeout=5)
+            state = json.loads((root / 'status.json').read_text())
+            self.assertTrue(state['finished'])
+            self.assertEqual(state['phase'], 'browser_unsupported')
 
     def test_owner_loss_interrupts_session_and_confirms_teardown(self):
         with tempfile.TemporaryDirectory() as folder:

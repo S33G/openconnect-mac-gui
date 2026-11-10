@@ -1,13 +1,13 @@
 # Support runbook
 
-1. **OpenConnect setup needed:** use Install dependencies to copy the tested Homebrew/pipx command. Run it in Terminal, then Re-check. For `pkg_resources` import failures, inject `setuptools<81` into the SSO environment. Python 3.11 is the tested runtime.
-2. **Gateway/group:** enter the DNS hostname and exact authentication group from your administrator. Group is passed to openconnect-sso. Defaults and example domains are intentionally empty/non-operational.
-3. **Allow the VPN connection:** enter the Mac administrator password into sudo's Terminal prompt. The app cannot enter it. Cancel via Disconnect. Keep Terminal open through teardown.
-4. **Finish signing in:** complete the helper's browser SSO/MFA. Sign-in has a three-minute deadline. Authentication failures do not trigger silent retries.
-5. **Certificate rejected:** confirm the hostname and certificate policy with IT. Do not disable certificate verification.
-6. **Offline/reconnecting:** restore network access. OpenConnect owns native tunnel recovery; app retries wait for the previous group to exit. Disconnect cancels retry intent. Automatic reconnect settings apply to the next session.
-7. **Session status stale / disconnect unconfirmed:** check the session Terminal. Do not start another VPN to work around it. The app cannot safely claim teardown while status is unavailable. A forced supervisor/tunnel kill may require manual network recovery or a restart.
+1. **Setup needed:** install `openconnect` and `python@3.11` with Homebrew, then Re-check. openconnect-sso, pipx and Qt are no longer used.
+2. **Gateway/group:** use your administrator's DNS hostname and exact authentication group. Group is passed directly to OpenConnect.
+3. **Administrator prompt:** enter the Mac password in Terminal. Keep the window open until disconnection. No permanent helper is installed in this development build.
+4. **Sign-in:** complete SSO/MFA in your default browser. The gateway must offer native external-browser SSO. Embedded-browser-only SAML requires a gateway configuration change or a different supported client; the app does not scrape or ask you to copy cookies.
+5. **Certificate rejected:** confirm the gateway and certificate policy with IT. Do not disable verification.
+6. **Offline/reconnect:** restore network access. OpenConnect owns active tunnel recovery; app retries wait for the previous process group to exit. Disconnect cancels retry intent. Settings apply to the next session.
+7. **Stale/unconfirmed session:** check the session Terminal. Do not start another VPN over it. Abrupt supervisor/tunnel termination may require manual recovery or restarting the Mac; recovery safely recognizes a new OS boot.
 
-Copy diagnostics for safe version/presence/status details. The copy omits gateway, group, and raw authentication output. Authentication, posture, policy, and server compatibility issues belong to the VPN administrator; reproducible app lifecycle/UI bugs belong in the project issue tracker.
+Copy diagnostics for safe dependency/status details. Authentication, device posture, server policy, and gateway compatibility belong to the VPN administrator. Reproducible app lifecycle/UI bugs belong in the issue tracker.
 
-Before distribution, qualify sign-in, routing/DNS restoration, dropped tunnels, sleep/wake, Terminal cancellation/closure, fresh accounts, MDM preferences, both architectures, signing/notarization, and dependency installation. Unit tests do not establish those outcomes.
+Before distribution, qualify SSO, routing/DNS restoration, dropped tunnels, sleep/wake, cancellation, Terminal closure, forced-crash recovery, MDM preferences, fresh users, both architectures, signing/notarization, and dependency installation.

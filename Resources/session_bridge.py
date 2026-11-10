@@ -16,6 +16,12 @@ def classify(line):
     text = line.lower()
     if 'server certificate verify failed' in text or 'certificate verification failed' in text:
         return 'certificate_failed'
+    if 'no sso handler' in text:
+        return 'browser_unsupported'
+    if 'sudo:' in text and ('password' in text or 'not allowed' in text):
+        return 'permission_failed'
+    if 'opening default browser for sso' in text:
+        return 'needs_sso'
     if 'authentication failed' in text or 'authentication cancelled' in text:
         return 'authentication_failed'
     if re.match(r'^configured as .+, with ssl connected(?: |$)', text.strip()):
@@ -29,36 +35,10 @@ def classify(line):
     return None
 
 
-def command(sso, host, group, automatic):
-    labels = host.split('.')
-    if len(labels) < 2 or len(host) > 253 or not all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', x) for x in labels):
-        raise ValueError('invalid gateway')
-    if len(group) > 80 or any(ord(c) < 32 or ord(c) == 127 for c in group) or group.startswith('-'):
-        raise ValueError('invalid group')
-    args = [sso, '--server', host, '--browser-display-mode', 'shown']
-    if group:
-        args += ['--authgroup', group]
-    # openconnect-sso 0.8.1 consumes the first remainder argument as a program label.
-    return args + ['--', 'openconnect', '--reconnect-timeout', '300' if automatic else '1']
-
-
 def environment(root, openconnect):
-    config = root / 'config'
-    folder = config / 'openconnect-sso'
-    folder.mkdir(parents=True, mode=0o700, exist_ok=True)
-    config.chmod(0o700)
-    target = folder / 'config.toml'
-    target.write_text('auto_fill_rules = {}\n')
-    target.chmod(0o600)
-    # Keep GUI/session variables, remove Python and Qt injection overrides.
-    env = {k: v for k, v in os.environ.items() if not k.startswith(('PYTHON', 'QT_', 'XDG_', 'LD_', 'DYLD_'))}
-    home = root / 'home'
-    home.mkdir(mode=0o700, exist_ok=True)
-    env.update(HOME=str(home), CFFIXED_USER_HOME=str(home), PATH=str(Path(openconnect).parent) + ':/usr/bin:/bin:/usr/sbin:/sbin',
-               LANG='en_US.UTF-8', LC_ALL='en_US.UTF-8',
-               PYTHON_KEYRING_BACKEND='keyring.backends.null.Keyring',
-               XDG_CONFIG_HOME=str(config), XDG_CONFIG_DIRS=str(config),
-               XDG_CACHE_HOME=str(root / 'cache'), XDG_DATA_HOME=str(root / 'data'))
+    env = {k: v for k, v in os.environ.items() if k in ('HOME', 'USER', 'LOGNAME', 'TMPDIR')}
+    env.update(PATH=str(Path(openconnect).parent) + ':/usr/bin:/bin:/usr/sbin:/sbin',
+               LANG='en_US.UTF-8', LC_ALL='en_US.UTF-8')
     return env
 
 
@@ -93,6 +73,7 @@ def supervise(args, root, env, session, tty, phase='needs_sso', interactive=Fals
     started = time.monotonic()
     heartbeat = 0
     had_tunnel = False
+    authenticated = False
     try:
         selector = selectors.DefaultSelector()
         if tty is not None:
@@ -131,8 +112,11 @@ def supervise(args, root, env, session, tty, phase='needs_sso', interactive=Fals
                 for line in lines:
                     observed = classify(line[-16384:].decode('utf-8', 'replace'))
                     if observed and stopped is None:
-                        if observed.endswith('_failed'): failure = observed
-                        phase = observed
+                        if observed == 'authorizing': authenticated = True
+                        if observed == 'connecting' and not (authenticated or had_tunnel): continue
+                        if observed.endswith('_failed') or observed == 'browser_unsupported':
+                            if failure is None or failure == 'authentication_failed': failure = observed
+                        phase = failure or observed
                         had_tunnel = had_tunnel or observed == 'connected'
             if interactive:
                 time.sleep(0.1)
@@ -185,9 +169,9 @@ def main():
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP): signal.signal(sig, stop)
     try:
         tty = os.open('/dev/tty', os.O_RDWR)
-        args = command(spec['sso'], spec['host'], spec['group'], spec['autoReconnect'])
+        args = [sys.executable, str(Path(__file__).with_name('openconnect_auth.py')), str(root / 'request.json')]
         env = environment(root, spec['openconnect'])
-        print('Betterer Connect needs administrator access to create the VPN tunnel.\nEnter your Mac password at the sudo prompt. Browser sign-in follows.\nKeep this window open until disconnected.', flush=True)
+        print('Betterer Connect needs administrator access to create the VPN tunnel.\nEnter your Mac password at the sudo prompt. Sign-in in your default browser follows.\nKeep this window open until disconnected.', flush=True)
         status(root, session, 'permission')
         if supervise(['/usr/bin/sudo', '-v'], root, env, session, tty, 'permission', True) != 0:
             prior = json.loads((root / 'status.json').read_text())['phase']
@@ -197,7 +181,7 @@ def main():
         if (root / 'stop').exists():
             status(root, session, 'stopped', True)
             return
-        print('Complete sign-in in the browser window. Use Betterer Connect to disconnect.', flush=True)
+        print('Complete sign-in in your default browser. Use Betterer Connect to disconnect.', flush=True)
         supervise(args, root, env, session, tty)
         print('VPN session ended. You can close this Terminal window.', flush=True)
     except Exception:

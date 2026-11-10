@@ -98,7 +98,7 @@ import UserNotifications
         do {
             let created = try OpenConnectSession.create(installation: installation, host: host, group: group, automatic: config.autoReconnect)
             session = created; sessionStarted = Date(); sessionServer = host; sessionGroup = group.isEmpty ? nil : group
-            note = "Complete the administrator prompt in Terminal, then sign in through the browser."
+            note = "Complete the administrator prompt in Terminal, then sign in through your default browser."
             Task {
                 do { try await created.launch() }
                 catch {
@@ -111,7 +111,7 @@ import UserNotifications
             }
         } catch { machine.launchFailed() }
     }
-    func disconnect() { reconnectAfterStop = false; machine.requestStop(); session?.stop() }
+    func disconnect() { reconnectAfterStop = false; machine.requestStop(); session?.stop(); note = session == nil ? "VPN session stopped." : "Waiting for tunnel teardown." }
     func cancelSignIn() { disconnect() }
     func reconnectNow() {
         guard session != nil else { connect(); return }
@@ -125,7 +125,7 @@ import UserNotifications
     func recheck() { installation = .detect(); machine.setAvailable(installation.present); refresh() }
     func openTerminal() { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) }
     func copyInstallCommand() {
-        copy("brew install openconnect pipx python@3.11 && pipx install --python \"$(brew --prefix python@3.11)/bin/python3.11\" 'openconnect-sso==0.8.1' && pipx inject --force openconnect-sso 'setuptools<81'")
+        copy("brew install openconnect python@3.11")
         note = "Install command copied. Run it in Terminal, then re-check."
         openTerminal()
     }
@@ -143,7 +143,6 @@ import UserNotifications
         Betterer Connect \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
         OpenConnect installed: \(installation.openconnect != nil)
-        openconnect-sso installed: \(installation.sso != nil)
         Python runtime found: \(installation.python != nil)
         State: \(machine.status.rawValue)
         Session owned: \(machine.sessionActive)
@@ -164,6 +163,7 @@ import UserNotifications
                     // Finished is emitted only after the complete process group exits.
                     machine.observe(phase: value.phase, finished: true, now: now)
                     session.cleanup(); self.session = nil
+                    note = machine.status == .disconnected ? "VPN session stopped." : ""
                     if reconnectAfterStop { reconnectAfterStop = false; connect() }
                 }
             } else if Date().timeIntervalSince(sessionStarted) > 30 { machine.stale() }

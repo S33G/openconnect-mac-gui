@@ -14,12 +14,13 @@ public enum SafeError: String, Error, Sendable {
     case outputLimit = "OUTPUT_LIMIT"
     case operationCancelled = "OPERATION_CANCELLED"
     case permission = "ADMIN_PERMISSION_FAILED"
+    case browserUnsupported = "EXTERNAL_BROWSER_UNSUPPORTED"
     case certificate = "CERTIFICATE_REJECTED"
     case stale = "SESSION_STATUS_STALE"
     case disconnectStuck = "DISCONNECT_UNCONFIRMED"
     public var message: String {
         switch self {
-        case .unavailable: "Install OpenConnect and openconnect-sso, then re-check."
+        case .unavailable: "Install OpenConnect and Python 3.11 or newer, then re-check."
         case .commandFailed: "OpenConnect could not complete the session. Check the gateway and authentication group, then retry."
         case .timedOut: "The command did not respond in time."
         case .ssoTimedOut: "Sign-in did not finish within three minutes. Retry when ready."
@@ -29,6 +30,7 @@ public enum SafeError: String, Error, Sendable {
         case .outputLimit: "The command returned more output than expected."
         case .operationCancelled: "The operation was cancelled."
         case .permission: "Administrator access was not granted. Retry and complete the prompt in Terminal."
+        case .browserUnsupported: "This gateway did not offer compatible default-browser SSO. Ask your VPN administrator about external-browser authentication."
         case .certificate: "The VPN server certificate was rejected. Check the gateway with your IT team."
         case .stale: "Session status is unavailable. Check Terminal. A new session cannot start until teardown is confirmed."
         case .disconnectStuck: "Tunnel teardown is not confirmed. Check Terminal; a new session is blocked."
