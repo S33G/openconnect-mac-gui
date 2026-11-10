@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "BettererConnect",
+    name: "OpenConnectMacGUI",
     platforms: [.macOS(.v13)],
     products: [
-        .library(name: "BetterConnectCore", targets: ["BetterConnectCore"]),
-        .executable(name: "BettererConnect", targets: ["BettererConnect"])
+        .library(name: "OpenConnectCore", targets: ["OpenConnectCore"]),
+        .executable(name: "OpenConnectMacGUI", targets: ["OpenConnectMacGUI"])
     ],
     targets: [
-        .target(name: "BetterConnectCore"),
-        .executableTarget(name: "BettererConnect", dependencies: ["BetterConnectCore"]),
-        .testTarget(name: "BetterConnectCoreTests", dependencies: ["BetterConnectCore"])
+        .target(name: "OpenConnectCore"),
+        .executableTarget(name: "OpenConnectMacGUI", dependencies: ["OpenConnectCore"]),
+        .testTarget(name: "OpenConnectCoreTests", dependencies: ["OpenConnectCore"])
     ]
 )

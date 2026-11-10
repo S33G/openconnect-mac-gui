@@ -1,11 +1,11 @@
 import AppKit
-import BetterConnectCore
+import OpenConnectCore
 import Network
 import SwiftUI
 import UserNotifications
 
 @MainActor final class AppModel: ObservableObject {
-    static let shared = AppModel(demo: ProcessInfo.processInfo.arguments.contains("--demo"))
+    static let shared = AppModel(demo: (ProcessInfo.processInfo.arguments.contains("--demo") || ProcessInfo.processInfo.arguments.contains("--render-previews")))
     @Published private(set) var machine: ConnectionMachine
     @Published private(set) var installation = OpenConnectInstallation()
     @Published private(set) var gateways: [String] = []
@@ -13,6 +13,7 @@ import UserNotifications
     @Published private(set) var config: Configuration
     @Published private(set) var sessionServer: String?
     @Published private(set) var sessionGroup: String?
+    @Published private(set) var previousBuildRunning = false
     @Published var groupInput: String
     private let monitor = NWPathMonitor()
     private var loop: Task<Void, Never>?
@@ -22,9 +23,10 @@ import UserNotifications
     private let demo: Bool
     private var window: NSWindow?
     var busy: Bool { [.permission, .connecting, .reconnecting, .disconnecting].contains(machine.status) }
-    var canConnect: Bool { machine.available && machine.online && !machine.sessionActive && [.disconnected, .error].contains(machine.status) }
+    var canConnect: Bool { !previousBuildRunning && machine.available && machine.online && !machine.sessionActive && [.disconnected, .error].contains(machine.status) }
     var canDisconnect: Bool { machine.sessionActive || machine.wantsConnection }
     var autoReconnectManaged: Bool { UserDefaults.standard.objectIsForced(forKey: "AutoReconnect") }
+    var backgroundManaged: Bool { UserDefaults.standard.objectIsForced(forKey: "RunInBackground") }
     var groupManaged: Bool { UserDefaults.standard.objectIsForced(forKey: "PreferredGroup") }
 
     init(demo: Bool = false) {
@@ -33,20 +35,16 @@ import UserNotifications
         self.config = config; self.groupInput = config.preferredGroup
         self.machine = ConnectionMachine(configuration: config); self.gateways = config.gateways
         if demo {
-            machine = ConnectionMachine(configuration: Configuration(gateways: ["vpn.example.com"]))
+            self.config = Configuration(gateways: ["vpn.example.com"])
+            machine = ConnectionMachine(configuration: self.config)
             machine.setAvailable(true); gateways = ["vpn.example.com"]
+            groupInput = ""
             note = "Preview mode · no VPN commands are run"
             return
         }
         installation = .detect(); machine.setAvailable(installation.present)
-        if let existing = OpenConnectSession.recover() {
-            session = existing; machine.selectedGateway = existing.request.host
-            // A recovered session remains owned even if dependencies were removed.
-            machine.setAvailable(true); _ = machine.begin(now: now)
-            sessionServer = existing.request.host; sessionGroup = existing.request.group
-            existing.stop(); machine.requestStop()
-            note = "Cleaning up the previous session before starting another."
-        }
+        previousBuildRunning = Self.previousBuildIsRunning()
+        recoverPreviousSession()
         monitor.pathUpdateHandler = { [weak self] path in
             let online = path.status == .satisfied
             Task { @MainActor [weak self] in
@@ -55,7 +53,7 @@ import UserNotifications
                 if !online && !self.config.autoReconnect { self.disconnect() }
             }
         }
-        monitor.start(queue: DispatchQueue(label: "betterer-connect.network"))
+        monitor.start(queue: DispatchQueue(label: "openconnect-mac-gui.network"))
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -64,12 +62,27 @@ import UserNotifications
             }
         }
     }
+    private static func previousBuildIsRunning() -> Bool {
+        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == "io.github.bettererconnect" }
+    }
+    private func recoverPreviousSession() {
+        guard !demo else { return }
+        if previousBuildRunning {
+            note = "Quit the previous development build before connecting here."
+            return
+        }
+        guard session == nil, let existing = OpenConnectSession.recover() else { return }
+        session = existing; machine.adoptRecoveredSession(gateway: existing.request.host)
+        sessionServer = existing.request.host; sessionGroup = existing.request.group
+        existing.stop(); machine.requestStop()
+        note = "Cleaning up the previous session before starting another."
+    }
     private var now: Double { ProcessInfo.processInfo.systemUptime }
     func showWindow() {
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 370, height: 620),
                                   styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-            window.title = "Betterer Connect"
+            window.title = "OpenConnect Mac GUI"
             window.contentView = NSHostingView(rootView: MenuContent(model: self))
             window.isReleasedWhenClosed = false; window.center(); self.window = window
         }
@@ -88,7 +101,7 @@ import UserNotifications
     }
     func connect() { startConnection(retry: false) }
     private func startConnection(retry: Bool) {
-        guard !demo, session == nil else { return }
+        guard !demo, !Self.previousBuildIsRunning(), session == nil else { return }
         let group = groupInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard group.count <= 80, !group.hasPrefix("-"), !group.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
             note = "Enter an authentication group of at most 80 characters, without control characters or a leading dash."; return
@@ -96,7 +109,7 @@ import UserNotifications
         guard machine.begin(now: now, retry: retry), let host = machine.selectedGateway else { return }
         if !groupManaged { UserDefaults.standard.set(group, forKey: "PreferredGroup") }
         do {
-            let created = try OpenConnectSession.create(installation: installation, host: host, group: group, automatic: config.autoReconnect)
+            let created = try OpenConnectSession.create(installation: installation, host: host, group: group, automatic: config.autoReconnect, background: config.runInBackground)
             session = created; sessionStarted = Date(); sessionServer = host; sessionGroup = group.isEmpty ? nil : group
             note = "Complete the administrator prompt in Terminal, then sign in through your default browser."
             Task {
@@ -122,6 +135,11 @@ import UserNotifications
         UserDefaults.standard.set(enabled, forKey: "AutoReconnect")
         config = ConfigStore.read(); machine.configuration = config
     }
+    func setRunInBackground(_ enabled: Bool) {
+        guard !backgroundManaged, !machine.sessionActive else { return }
+        UserDefaults.standard.set(enabled, forKey: "RunInBackground")
+        config = ConfigStore.read(); machine.configuration = config
+    }
     func recheck() { installation = .detect(); machine.setAvailable(installation.present); refresh() }
     func openTerminal() { NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")) }
     func copyInstallCommand() {
@@ -140,19 +158,24 @@ import UserNotifications
     func copy(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
     func copyDiagnostics() {
         copy("""
-        Betterer Connect \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")
+        OpenConnect Mac GUI \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development")
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
         OpenConnect installed: \(installation.openconnect != nil)
         Python runtime found: \(installation.python != nil)
         State: \(machine.status.rawValue)
         Session owned: \(machine.sessionActive)
         Auto reconnect: \(config.autoReconnect)
+        Background mode: \(config.runInBackground)
         Last error: \(machine.lastError?.rawValue ?? "none")
         """)
         note = config.supportChannel.isEmpty ? "Diagnostics copied. No gateway, username, or authentication output included." : "Diagnostics copied. Send to \(config.supportChannel)."
     }
     private func refresh() {
         guard !demo else { return }
+        let wasBlocked = previousBuildRunning
+        previousBuildRunning = Self.previousBuildIsRunning()
+        if wasBlocked && !previousBuildRunning { note = "" }
+        recoverPreviousSession()
         let previous = machine.status
         if let session {
             session.heartbeat()
@@ -170,7 +193,7 @@ import UserNotifications
         } else if let retry = machine.retryAt, now >= retry, machine.online { startConnection(retry: true) }
         if previous != machine.status && machine.status == .connected {
             UserDefaults.standard.set(sessionServer, forKey: "LastUsedGateway")
-            note = "OpenConnect configured the VPN tunnel."
+            note = config.runInBackground ? "VPN is running in the background. You can close Terminal; keep this app running." : "VPN connected. Keep the Terminal window open until disconnected."
             notifyConnected()
         }
     }
@@ -178,7 +201,7 @@ import UserNotifications
         Task {
             let center = UNUserNotificationCenter.current()
             guard await center.notificationSettings().authorizationStatus == .authorized else { return }
-            let content = UNMutableNotificationContent(); content.title = "Betterer Connect"; content.body = "OpenConnect configured the VPN tunnel."
+            let content = UNMutableNotificationContent(); content.title = "OpenConnect Mac GUI"; content.body = "OpenConnect configured the VPN tunnel."
             try? await center.add(UNNotificationRequest(identifier: "connection-status", content: content, trigger: nil))
         }
     }

@@ -39,6 +39,13 @@ public struct ConnectionMachine: Sendable {
         status = .permission
         return true
     }
+    /// Existing ownership must be represented even when a new connection is prohibited.
+    public mutating func adoptRecoveredSession(gateway: String) {
+        selectedGateway = gateway
+        sessionActive = true; wantsConnection = false; retryAt = nil
+        stopping = true; established = false; retryEligible = false
+        connectedSince = nil; lastError = nil; status = .disconnecting
+    }
     public mutating func requestStop() {
         wantsConnection = false; retryAt = nil; backoff.reset(); retryEligible = false
         stopping = sessionActive
@@ -65,7 +72,7 @@ public struct ConnectionMachine: Sendable {
         if finished {
             sessionActive = false; connectedSince = nil
             if stopping || !wantsConnection {
-                stopping = false; lastError = nil; status = online ? .disconnected : .offNetwork
+                stopping = false; lastError = nil; status = !available ? .dependenciesMissing : online ? .disconnected : .offNetwork
                 return
             }
             if (established || retryEligible) && configuration.autoReconnect && (failure == nil || failure == .commandFailed) {

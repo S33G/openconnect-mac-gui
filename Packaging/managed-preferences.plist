@@ -4,6 +4,7 @@
     <key>GatewayList</key><array/>
     <key>DefaultGateway</key><string></string>
     <key>PreferredGroup</key><string></string>
+    <key>RunInBackground</key><false/>
     <key>AutoReconnect</key><true/>
     <key>MaxBackoffSeconds</key><integer>300</integer>
     <key>SupportChannel</key><string></string>

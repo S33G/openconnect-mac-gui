@@ -83,6 +83,16 @@ class LifecycleTests(unittest.TestCase):
             self.assertTrue(state['finished'])
             self.assertEqual(state['phase'], 'browser_unsupported')
 
+    def test_configured_tunnel_supersedes_nonfatal_pinned_certificate_warning(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder); (root/'owner').touch()
+            fixture="print('Server certificate verify failed: signer not found');print('Configured as 192.0.2.1, with SSL connected');raise SystemExit(0)"
+            call=f"m.supervise([sys.executable,'-c',{fixture!r}],root,dict(os.environ),'fixture',None)"
+            p=self.run_fixture(root,'',call);p.wait(timeout=5)
+            state=json.loads((root/'status.json').read_text())
+            self.assertNotEqual(state['phase'],'certificate_failed')
+            self.assertTrue(state['finished'])
+
     def test_owner_loss_interrupts_session_and_confirms_teardown(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

@@ -1,15 +1,27 @@
 # Security
 
-Betterer Connect uses OpenConnect's native external-browser SSO. Authentication runs as the logged-in user and opens the user's default browser through `/usr/bin/open`. Browser credentials and MFA remain in that browser. The app does not inspect the browser's DOM, cookies, profile, or history.
+OpenConnect Mac GUI authenticates as the logged-in user through OpenConnect's native external-browser SSO. `/usr/bin/open` selects the user's default browser. The app does not inspect browser DOM, profiles, cookies, or history; passwords and MFA remain in the browser.
 
-OpenConnect's `--authenticate` result necessarily includes a session cookie. A standard-library adapter captures this output through a bounded in-memory pipe, parses its quoted fields as data, and passes the cookie to the privileged tunnel over stdin. No shell evaluation is performed. No cookie is stored in preferences, session files, logs, Terminal, clipboard, or command arguments. Certificate and validated connection metadata are passed as separate arguments. `--non-inter` prevents console credential prompts; certificate checks remain enabled.
+OpenConnect's authentication result necessarily contains a short-lived cookie. The adapter captures at most 64 KiB, parses quoted fields as data, validates connection metadata, and passes a bounded cookie through stdin. It never evaluates the output as a shell script. Cookies and administrator passwords are not saved to preferences, session files, logs, Terminal, clipboard, or command arguments. Python does not guarantee secure erasure of transient memory.
 
-The app and supervisor run without root privileges. Administrator access is obtained through a normal sudo prompt in Terminal; the subsequent tunnel command uses sudo's noninteractive mode. No permanent privileged helper or sudoers policy is installed. OpenConnect and its installed vpnc-script run with the privilege required to configure the tunnel, routes, and DNS.
+## Privileges and session ownership
 
-The supervisor bounds and discards raw output, emitting allowlisted lifecycle states only. Diagnostic copies contain dependency presence, OS/app version, and safe codes; no hostname, authentication group, username, cookie, or raw transcript. Temporary in-memory authentication material is not guaranteed to be securely erased by Python.
+Foreground sessions obtain normal sudo authorization in Terminal and run the tunnel with the privileges needed to configure routes and DNS. The foreground Terminal must stay open until disconnection.
 
-Mode-0700 session folders store non-secret host/group settings, boot identity, heartbeat, stop marker, and status. Atomic claims prevent duplicate/delayed launches. Completed status requires the owned process group to exit. An absent app heartbeat requests teardown; uncertain cleanup blocks another connection. Completed folders are removed, and previous-boot sessions can be retired safely. Other programs running as the same user can access that user's files/process memory; this is not a sandbox boundary.
+Optional background sessions use the same per-session authorization, then start a bundled temporary privileged supervisor. It accepts validated connection metadata and a cookie through stdin, starts only the expected Homebrew OpenConnect executable with fixed options, and owns its process group. It does not accept arbitrary commands, route-script paths, environments, or additional arguments. Python runs with isolated imports, site initialization disabled, and bytecode writes disabled for this privileged bootstrap.
 
-The trust boundary includes OpenConnect, Python, Homebrew dependencies, the operating system, and the user's browser. Browser cookies/history use its normal retention settings. No third-party tunnel binaries are bundled.
+The bootstrap validates the sudo-established caller identity and private session directory before detaching. Two pipe acknowledgments transfer ownership before a tunnel can start. The Terminal supervisor stops publishing status after handoff and no longer treats Terminal closure as a stop request. The detached supervisor observes the native app's heartbeat and stop marker. App Quit requests disconnection; loss of heartbeat also requests teardown. The supervisor exits after the session ends. No persistent service, sudoers change, PAM change, or administrator-password storage is installed.
 
-Use GitHub private vulnerability reporting if enabled, otherwise contact the repository owner privately. Do not publish real VPN transcripts or authentication material. No security response SLA is promised for this development project.
+Status operations are anchored to the checked directory descriptor. Privileged writes use exclusive temporary files, no-follow opens, FD-based ownership changes, and atomic replacements. User-created status symlinks are not followed. Final completion requires the owned child group to exit; uncertain teardown blocks another connection.
+
+The installed Homebrew OpenConnect/Python executables and bundled scripts are part of the administrator-approved trust boundary. Their user-writable installation paths are not a defense against malicious code already running as that user. This is one reason the project does not supply passwordless sudo rules for them.
+
+## Files and diagnostics
+
+Mode-0700 session folders store non-secret launch settings, a boot identifier, heartbeat, stop marker, ownership marker, and safe status. Raw subprocess output is bounded and discarded. Diagnostic copies contain dependency presence, app/OS version, settings, and safe codes, without hostnames, groups, usernames, cookies, or transcripts.
+
+Completed folders are removed. Startup recovers prior sessions in place and uses a stable OS boot UUID to distinguish a reboot. The rebranded app blocks new connections while the earlier development app is running, avoiding competing reconnect loops. Other programs running as the same user can access that user's files and process memory; the session directory is not a sandbox boundary.
+
+Normal OpenConnect certificate verification remains enabled. Browser retention follows the browser's own controls. OpenConnect and its installed vpnc-script manage routing and DNS. No third-party tunnel binaries are redistributed.
+
+For vulnerabilities, use GitHub private vulnerability reporting if enabled, otherwise contact the repository owner privately. Do not publish real VPN transcripts or authentication material. No response SLA is promised for this development project.

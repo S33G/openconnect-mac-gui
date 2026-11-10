@@ -33,6 +33,16 @@ def parse_auth(data):
             if key in fields: raise ValueError('duplicate authentication field')
             if any(ord(c) < 32 or ord(c) == 127 for c in value): raise ValueError('control character')
             fields[key] = value
+    return validate_fields(fields)
+
+
+def validate_fields(fields):
+    if not isinstance(fields, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in fields.items()):
+        raise ValueError('invalid authentication fields')
+    if any(any(ord(c) < 32 or ord(c) == 127 for c in value) for value in fields.values()):
+        raise ValueError('control character')
+    if len(fields.get('COOKIE', '').encode('utf-8')) > 4095:
+        raise ValueError('cookie too large')
     if not all(fields.get(k) for k in ('COOKIE', 'CONNECT_URL', 'FINGERPRINT')):
         raise ValueError('incomplete authentication response')
     url = urlsplit(fields['CONNECT_URL'])
@@ -45,8 +55,8 @@ def parse_auth(data):
     return fields
 
 
-def tunnel_command(executable, fields, automatic):
-    args = ['/usr/bin/sudo', '-n', executable, '--non-inter', '--cookie-on-stdin',
+def tunnel_command(executable, fields, automatic, privileged=False):
+    args = ([executable] if privileged else ['/usr/bin/sudo', '-n', executable]) + [ '--non-inter', '--cookie-on-stdin',
             '--servercert', fields['FINGERPRINT'], '--os=mac-intel', '--useragent=AnyConnect',
             '--reconnect-timeout', '300' if automatic else '1']
     if fields.get('RESOLVE'): args += ['--resolve', fields['RESOLVE']]
@@ -68,6 +78,10 @@ def run(spec):
         return code
     fields = parse_auth(data)
     data = b''
+    if spec.get('runInBackground', False):
+        payload = json.dumps(dict(sessionID=spec['sessionID'], openconnect=spec['openconnect'], autoReconnect=spec['autoReconnect'], fields=fields)).encode('utf-8')
+        launcher = ['/usr/bin/sudo', '-n', sys.executable, '-I', '-S', '-B', str(Path(__file__).with_name('headless_tunnel.py')), str(Path(sys.argv[1]).parent)]
+        return subprocess.run(launcher, input=payload).returncode
     cookie = fields.pop('COOKIE')
     print('Authentication successful', flush=True)
     # sudo was authorized directly in Terminal by the parent supervisor.

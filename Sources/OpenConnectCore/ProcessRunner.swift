@@ -10,7 +10,7 @@ public struct CommandResult: Sendable {
 /// Serial, bounded subprocess execution. No shell, no stdin, no raw-output logging.
 /// Cancellation terminates only the CLI child created by this instance, never another application.
 public final class ProcessRunner: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "betterer-connect.cli", qos: .utility)
+    private let queue = DispatchQueue(label: "openconnect-mac-gui.cli", qos: .utility)
     private let lock = NSLock()
     private var active: Process?
     private var generation: UInt64 = 0

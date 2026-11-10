@@ -1,6 +1,6 @@
 import AppKit
 import Darwin
-import BetterConnectCore
+import OpenConnectCore
 
 struct OpenConnectInstallation {
     var openconnect: String?
@@ -19,6 +19,7 @@ struct SessionRequest: Codable {
     let host: String
     let group: String
     let openconnect: String
+    let runInBackground: Bool?
     let autoReconnect: Bool
     let bootID: String?
 }
@@ -35,7 +36,7 @@ struct SessionStatus: Decodable {
     var lastStatus: SessionStatus?
     static var sessionsRoot: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Betterer Connect/Sessions", isDirectory: true)
+            .appendingPathComponent("OpenConnect Mac GUI/Sessions", isDirectory: true)
     }
     init(root: URL, request: SessionRequest) { self.root = root; self.request = request }
     static func bootIdentity() -> String? {
@@ -50,9 +51,14 @@ struct SessionStatus: Decodable {
         return UUID(uuidString: value)?.uuidString
 
     }
+    // Compatibility with the earlier unpublished app identity. Never move a live session.
+    static var legacySessionsRoot: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Betterer Connect/Sessions", isDirectory: true)
+    }
     static func recover() -> OpenConnectSession? {
         let fm = FileManager.default
-        let folders = (try? fm.contentsOfDirectory(at: sessionsRoot, includingPropertiesForKeys: nil)) ?? []
+        let folders = [legacySessionsRoot, sessionsRoot].flatMap { (try? fm.contentsOfDirectory(at: $0, includingPropertiesForKeys: nil)) ?? [] }
         for folder in folders.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
             guard let data = try? Data(contentsOf: folder.appendingPathComponent("request.json")),
                   let request = try? JSONDecoder().decode(SessionRequest.self, from: data) else { continue }
@@ -67,10 +73,10 @@ struct SessionStatus: Decodable {
         }
         return nil
     }
-    static func create(installation: OpenConnectInstallation, host: String, group: String, automatic: Bool) throws -> OpenConnectSession {
+    static func create(installation: OpenConnectInstallation, host: String, group: String, automatic: Bool, background: Bool) throws -> OpenConnectSession {
         guard let oc = installation.openconnect, let python = installation.python,
               let bridge = Bundle.main.url(forResource: "session_bridge", withExtension: "py") else { throw SafeError.unavailable }
-        let request = SessionRequest(sessionID: UUID().uuidString, host: host, group: group, openconnect: oc, autoReconnect: automatic, bootID: bootIdentity())
+        let request = SessionRequest(sessionID: UUID().uuidString, host: host, group: group, openconnect: oc, runInBackground: background, autoReconnect: automatic, bootID: bootIdentity())
         let root = sessionsRoot.appendingPathComponent(request.sessionID, isDirectory: true)
         let fm = FileManager.default
         try fm.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -123,6 +129,7 @@ struct SessionStatus: Decodable {
             lastUsed: defaults.string(forKey: "LastUsedGateway"),
             lastSelected: defaults.string(forKey: "LastSelectedGateway"),
             autoReconnect: defaults.object(forKey: "AutoReconnect") == nil ? true : defaults.bool(forKey: "AutoReconnect"),
+            runInBackground: defaults.bool(forKey: "RunInBackground"),
             maxBackoff: (defaults.object(forKey: "MaxBackoffSeconds") as? NSNumber)?.doubleValue ?? 300,
             preferredGroup: defaults.string(forKey: "PreferredGroup") ?? "",
             supportChannel: defaults.string(forKey: "SupportChannel") ?? ""

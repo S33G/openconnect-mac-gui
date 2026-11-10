@@ -6,8 +6,8 @@ let master = NSImage(size: NSSize(width: 1024, height: 1024))
 master.lockFocus()
 let rect = NSRect(x: 70, y: 70, width: 884, height: 884)
 let path = NSBezierPath(roundedRect: rect, xRadius: 196, yRadius: 196)
-NSGradient(starting: NSColor(red: 0.64, green: 0.26, blue: 0.95, alpha: 1),
-           ending: NSColor(red: 0.29, green: 0.22, blue: 0.82, alpha: 1))!.draw(in: path, angle: -45)
+NSGradient(starting: NSColor(calibratedWhite: 0.32, alpha: 1),
+           ending: NSColor(calibratedWhite: 0.12, alpha: 1))!.draw(in: path, angle: -45)
 // Original vector artwork; no vendor logos or SF Symbol artwork in the app icon.
 let transform = NSAffineTransform()
 transform.translateX(by: 512, yBy: 512)
@@ -20,6 +20,9 @@ for x in [230.0, 434.0] {
     link.lineWidth = 54
     link.stroke()
 }
+let indicator = NSBezierPath(ovalIn: NSRect(x: 714, y: 190, width: 82, height: 82))
+NSColor(red: 0.26, green: 0.86, blue: 0.58, alpha: 1).setFill()
+indicator.fill()
 master.unlockFocus()
 for size in [16, 32, 128, 256, 512] {
     for scale in [1, 2] {

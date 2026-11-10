@@ -1,0 +1,9 @@
+# Brand, appearance, and background sessions
+
+The app is OpenConnect Mac GUI. Package/module names, bundle identity, scripts, Terminal copy, documentation and artifacts follow that identity. SwiftUI uses macOS window backgrounds, semantic status colors and the user's accent color; normal appearance remains inherited from macOS. The README includes original generated connection artwork and previews rendered from the real SwiftUI view.
+
+Background mode is optional and defaults off. The user confirmed that Terminal may close after startup while the app owns the tunnel; quitting the app disconnects it. Startup still obtains one per-session sudo authorization in Terminal. Browser authentication remains unprivileged. A bundled, temporary root bootstrap receives the short-lived authentication material only through stdin, detaches a supervisor, and starts only the installed OpenConnect executable. No service is installed and no sudoers policy changes.
+
+The detached supervisor anchors control/status operations to a checked private session-directory descriptor. It creates user-readable files with exclusive/no-follow opens, never follows user-created status symlinks, publishes an ownership handoff marker, and watches the same app heartbeat and stop marker. Final completion follows confirmed child-group exit. The Terminal parent relinquishes state publication after the handoff. ASCII output distinguishes foreground (keep open) and background (safe to close after handoff).
+
+Validation: synthetic detached-process tests, symlink/status hardening, cancellation before/during handoff, missing-owner cleanup, existing lifecycle suite, native light/dark previews, package/branding scans, signature checks, and an authorized real foreground/background cycle when human authentication is available. Record live evidence separately from fixtures. Document administrator-access options with official sources; do not modify authentication policy as part of research.

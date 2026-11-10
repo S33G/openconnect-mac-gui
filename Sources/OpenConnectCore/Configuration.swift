@@ -16,13 +16,14 @@ public enum Gateway {
 public struct Configuration: Sendable {
     public let gateways: [String]
     public let preferredGateway: String?
+    public let runInBackground: Bool
     public let autoReconnect: Bool
     public let maxBackoff: Double
     public let preferredGroup: String
     public let supportChannel: String
 
     public init(gateways: [String] = [], defaultGateway: String? = nil, lastUsed: String? = nil, lastSelected: String? = nil,
-                autoReconnect: Bool = true, maxBackoff: Double = 300,
+                autoReconnect: Bool = true, runInBackground: Bool = false, maxBackoff: Double = 300,
                 preferredGroup: String = "", supportChannel: String = "") {
         let defaultHost = defaultGateway.flatMap(Gateway.normalize)
         let last = lastUsed.flatMap(Gateway.normalize)
@@ -34,6 +35,7 @@ public struct Configuration: Sendable {
         self.gateways = ordered
         self.preferredGateway = defaultHost ?? selected ?? last ?? ordered.first
         self.autoReconnect = autoReconnect
+        self.runInBackground = runInBackground
         self.maxBackoff = maxBackoff.isFinite && maxBackoff >= 2 ? min(maxBackoff, 3600) : 300
         self.preferredGroup = String(preferredGroup.prefix(80))
         self.supportChannel = String(supportChannel.prefix(200))

@@ -17,12 +17,12 @@ jobs:
         run: scripts/build-app.sh
       - name: Check bundle
         run: |
-          plutil -lint 'dist/Betterer Connect.app/Contents/Info.plist'
-          codesign --verify --deep --strict 'dist/Betterer Connect.app'
-          test "$(find 'dist/Betterer Connect.app/Contents/MacOS' -type f | wc -l | tr -d ' ')" = 1
+          plutil -lint 'dist/OpenConnect Mac GUI.app/Contents/Info.plist'
+          codesign --verify --deep --strict 'dist/OpenConnect Mac GUI.app'
+          test "$(find 'dist/OpenConnect Mac GUI.app/Contents/MacOS' -type f | wc -l | tr -d ' ')" = 1
       - name: Archive development app
-        run: ditto -c -k --keepParent 'dist/Betterer Connect.app' dist/Betterer-Connect-development.zip
+        run: ditto -c -k --keepParent 'dist/OpenConnect Mac GUI.app' dist/OpenConnect-Mac-GUI-development.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Betterer-Connect-development
-          path: dist/Betterer-Connect-development.zip
+          name: OpenConnect-Mac-GUI-development
+          path: dist/OpenConnect-Mac-GUI-development.zip

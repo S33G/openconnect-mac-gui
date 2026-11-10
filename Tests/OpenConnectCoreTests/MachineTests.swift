@@ -1,5 +1,5 @@
 import XCTest
-@testable import BetterConnectCore
+@testable import OpenConnectCore
 
 final class MachineTests: XCTestCase {
     func testAuthenticationIsNotConnectionAndStopRequiresConfirmation() {
@@ -39,6 +39,20 @@ final class MachineTests: XCTestCase {
         XCTAssertNotNil(m.retryAt)
         m.requestStop()
         XCTAssertNil(m.retryAt)
+    }
+    func testRecoveredOwnershipIsAdoptedEvenWhileOfflineOrDependenciesMissing() {
+        var m = ConnectionMachine(configuration: Configuration())
+        m.setAvailable(false); m.setNetwork(false)
+        m.adoptRecoveredSession(gateway: "vpn.example.com")
+        XCTAssertTrue(m.sessionActive)
+        XCTAssertEqual(m.status, .disconnecting)
+        m.requestStop()
+        m.setNetwork(true)
+        XCTAssertTrue(m.sessionActive)
+        XCTAssertFalse(m.begin(now: 1))
+        m.observe(phase: "stopped", finished: true, now: 2)
+        XCTAssertFalse(m.sessionActive)
+        XCTAssertEqual(m.status, .dependenciesMissing)
     }
     func testStableConnectionResetsRetryBudget() {
         var m = ConnectionMachine(configuration: Configuration(gateways: ["vpn.example.com"]))

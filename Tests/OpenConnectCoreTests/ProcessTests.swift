@@ -1,5 +1,5 @@
 import XCTest
-@testable import BetterConnectCore
+@testable import OpenConnectCore
 
 final class ProcessTests: XCTestCase, @unchecked Sendable {
     func testCancelStopsActiveProcessAndInvalidatesQueuedCommands() async throws {

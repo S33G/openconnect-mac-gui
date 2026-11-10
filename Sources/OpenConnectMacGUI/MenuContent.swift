@@ -1,5 +1,5 @@
 import SwiftUI
-import BetterConnectCore
+import OpenConnectCore
 
 struct MenuContent: View {
     @ObservedObject var model: AppModel
@@ -10,17 +10,17 @@ struct MenuContent: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 10) {
                 Image(systemName: "link.circle.fill")
-                    .font(.system(size: 30, weight: .medium)).foregroundStyle(.purple)
+                    .font(.system(size: 30, weight: .medium)).foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Betterer Connect").font(.system(size: 17, weight: .semibold))
-                    Text("A little less VPN friction.").font(.caption).foregroundStyle(.secondary)
+                    Text("OpenConnect Mac GUI").font(.system(size: 17, weight: .semibold))
+                    Text("OpenConnect for macOS").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Menu {
                     Button("Open as window", action: model.showWindow)
                     Button("Enable notifications…", action: model.enableNotifications)
                     Divider()
-                    Button("Quit Betterer Connect") { NSApplication.shared.terminate(nil) }
+                    Button("Quit OpenConnect Mac GUI") { NSApplication.shared.terminate(nil) }
                 } label: { Image(systemName: "ellipsis.circle").font(.title3) }
                 .menuStyle(.borderlessButton).fixedSize()
                 .accessibilityLabel("App options")
@@ -65,7 +65,7 @@ struct MenuContent: View {
                     Text("GATEWAY").font(.system(size: 10, weight: .semibold)).tracking(1.4).foregroundStyle(.secondary)
                     Spacer()
                     Button(addingGateway ? "Done" : "Add gateway") { addingGateway.toggle() }
-                        .buttonStyle(.plain).font(.caption).foregroundStyle(.purple)
+                        .buttonStyle(.plain).font(.caption).foregroundStyle(Color.accentColor)
                         .disabled(model.machine.sessionActive)
                 }
                 if !model.gateways.isEmpty {
@@ -96,18 +96,18 @@ struct MenuContent: View {
 
             HStack(spacing: 10) {
                 if model.machine.status == .dependenciesMissing {
-                    Button("Install dependencies", action: model.copyInstallCommand).buttonStyle(.borderedProminent).tint(.purple)
+                    Button("Install dependencies", action: model.copyInstallCommand).buttonStyle(.borderedProminent).tint(.accentColor)
                     Button("Re-check", action: model.recheck).disabled(model.busy)
                 } else if model.machine.status == .needsSSO {
-                    Button("Open Terminal", action: model.openTerminal).buttonStyle(.borderedProminent).tint(.blue)
+                    Button("Open Terminal", action: model.openTerminal).buttonStyle(.borderedProminent).tint(.accentColor)
                     Button("Cancel", action: model.cancelSignIn)
                 } else {
                     if model.machine.status == .connected {
                         Button("Reconnect now", action: model.reconnectNow)
-                            .buttonStyle(.borderedProminent).tint(.purple).disabled(model.busy)
+                            .buttonStyle(.borderedProminent).tint(.accentColor).disabled(model.busy)
                     } else {
                         Button(model.machine.status == .error ? "Retry connection" : "Connect", action: model.connect)
-                            .buttonStyle(.borderedProminent).tint(.purple).disabled(!model.canConnect)
+                            .buttonStyle(.borderedProminent).tint(.accentColor).disabled(!model.canConnect)
                     }
                     Button("Disconnect", action: model.disconnect).disabled(!model.canDisconnect)
                 }
@@ -123,6 +123,15 @@ struct MenuContent: View {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }.toggleStyle(.switch).controlSize(.small).disabled(model.autoReconnectManaged || model.machine.sessionActive)
+
+            Toggle(isOn: Binding(get: { model.config.runInBackground }, set: model.setRunInBackground)) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Run VPN in background").font(.callout)
+                    Text(model.backgroundManaged ? "Managed by your organization" : "Close Terminal after startup; keep this app running")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }.toggleStyle(.switch).controlSize(.small)
+                .disabled(model.backgroundManaged || model.machine.sessionActive)
 
             HStack {
                 Button("Open Terminal", action: model.openTerminal)
@@ -141,5 +150,6 @@ struct MenuContent: View {
             }.font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(20).frame(width: 370).fixedSize(horizontal: false, vertical: true)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }

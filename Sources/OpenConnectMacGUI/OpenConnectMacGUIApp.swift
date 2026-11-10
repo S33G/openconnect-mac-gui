@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
-import BetterConnectCore
+import OpenConnectCore
 
-@main struct BettererConnectApp: App {
+@main struct OpenConnectMacGUIApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel.shared
     var body: some Scene {
@@ -13,7 +13,7 @@ import BetterConnectCore
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(model.statusColor, .primary)
                 .help(model.statusDescription)
-                .accessibilityLabel("Betterer Connect: \(model.statusTitle)")
+                .accessibilityLabel("OpenConnect Mac GUI: \(model.statusTitle)")
         }
         .menuBarExtraStyle(.window)
     }
@@ -21,6 +21,15 @@ import BetterConnectCore
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "--render-previews"), arguments.indices.contains(index + 1) {
+            Task {
+                do { try await PreviewRenderer.render(to: URL(fileURLWithPath: arguments[index + 1])) }
+                catch { fputs("Could not render documentation previews.\n", stderr) }
+                NSApplication.shared.terminate(nil)
+            }
+            return
+        }
         if !UserDefaults.standard.bool(forKey: "HasLaunched") || ProcessInfo.processInfo.arguments.contains("--show-window") {
             AppModel.shared.showWindow()
             UserDefaults.standard.set(true, forKey: "HasLaunched")
@@ -66,7 +75,7 @@ extension AppModel {
         switch machine.status {
         case .connected: .green
         case .connecting, .reconnecting, .disconnecting: .orange
-        case .needsSSO, .permission: .blue
+        case .needsSSO, .permission: .accentColor
         case .dependenciesMissing, .error: .red
         case .offNetwork, .disconnected: .secondary
         }

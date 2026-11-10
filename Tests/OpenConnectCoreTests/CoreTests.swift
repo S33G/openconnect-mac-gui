@@ -1,5 +1,5 @@
 import XCTest
-@testable import BetterConnectCore
+@testable import OpenConnectCore
 
 final class CoreTests: XCTestCase {
     func testGatewayValidationRejectsOptionsCredentialsAndPaths() {
@@ -16,6 +16,8 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(config.preferredGateway, "d.example.com")
         XCTAssertFalse(config.autoReconnect)
         XCTAssertEqual(config.maxBackoff, 300)
+        XCTAssertFalse(Configuration().runInBackground)
+        XCTAssertTrue(Configuration(runInBackground: true).runInBackground)
         XCTAssertEqual(Configuration().gateways, [])
         XCTAssertNil(Configuration().preferredGateway)
         XCTAssertEqual(Configuration(lastUsed: "old.example.com", lastSelected: "new.example.com").preferredGateway, "new.example.com")
