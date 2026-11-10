@@ -1,0 +1,26 @@
+name: macOS
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test-and-build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test --disable-sandbox
+      - name: Build app
+        run: scripts/build-app.sh
+      - name: Check bundle
+        run: |
+          plutil -lint 'dist/Betterer Connect.app/Contents/Info.plist'
+          codesign --verify --deep --strict 'dist/Betterer Connect.app'
+          test "$(find 'dist/Betterer Connect.app/Contents/MacOS' -type f | wc -l | tr -d ' ')" = 1
+      - name: Archive development app
+        run: ditto -c -k --keepParent 'dist/Betterer Connect.app' dist/Betterer-Connect-development.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Betterer-Connect-development
+          path: dist/Betterer-Connect-development.zip
